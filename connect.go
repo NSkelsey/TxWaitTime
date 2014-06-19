@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"time"
 
 	_ "github.com/lib/pq"
 )
@@ -15,10 +16,24 @@ func main() {
 		log.Fatal(err)
 	}
 
-	r, err := db.Query(`SELECT * FROM txs;`)
+	rows, err := db.Query(`SELECT * FROM txs;`)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Println(r)
+	fmt.Println("success!")
+	for rows.Next() {
+		var txid []byte
+		var kind string
+		var seen time.Time
+		var extra bool
+		var priority float64
+		var size, fee int
+
+		err := rows.Scan(&txid, &kind, &seen, &size, &extra, &priority, &fee)
+		if err != nil {
+			fmt.Println(err)
+		}
+		fmt.Printf("%x, %s\n", txid, kind)
+	}
 }

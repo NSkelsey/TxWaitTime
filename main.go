@@ -7,24 +7,26 @@ import (
 	"time"
 	"watchtower"
 
+	"github.com/NSkelsey/btcbuilder"
 	"github.com/conformal/btcjson"
 	"github.com/conformal/btcrpcclient"
+	"github.com/conformal/btcscript"
 	"github.com/conformal/btcutil"
 	"github.com/conformal/btcwire"
 	"github.com/lib/pq"
 )
 
 var logger *log.Logger = log.New(os.Stdout, "", log.Ltime|log.Llongfile)
-var connurl string = "postgres://postgres:obscureref@localhost/txwaittime"
+var db *sql.DB
 
-func handle(err error) {
+// some golang ugliness
+var NonStandard, PubKey, PubKeyHash, ScriptHash, MultiSig, NullData btcscript.ScriptClass = btcscript.NonStandardTy, btcscript.PubKeyTy, btcscript.PubKeyHashTy,
+	btcscript.ScriptHashTy, btcscript.MultiSigTy, btcscript.NullDataTy
+
+func dieWith(err error) {
 	if err != nil {
 		logger.Fatal(err)
 	}
-}
-
-func selectKind(tx *btcwire.MsgTx) string {
-	return "p2sh"
 }
 
 type ResConn struct {
@@ -32,22 +34,16 @@ type ResConn struct {
 	Chan chan btcjson.GetRawMempoolResult
 }
 
-func pinger(conn *sql.DB) {
-	for {
-		time.Sleep(1 * time.Second)
-		handle(conn.Ping())
-		logger.Println("tick")
-	}
-}
-
 func main() {
 
-	tConn, err := sql.Open("postgres", connurl)
-	handle(err)
-	bConn, err := sql.Open("postgres", connurl)
-	handle(err)
+	connurl := "postgres://postgres:obscureref@localhost/txwaittime"
+	var err error
+	db, err = sql.Open("postgres", connurl)
+	defer db.Close()
+	dieWith(err)
 
-	go pinger(tConn)
+	err = db.Ping()
+	dieWith(err)
 
 	rpcchan := make(chan *ResConn)
 
@@ -67,8 +63,11 @@ func main() {
 		_hash, _ := block.BlockSha()
 		hash := _hash.Bytes()
 		// insert block
-		_, err := bConn.Query(`INSERT INTO blocks(hash, firstseen) VALUES($1, $2)`,
+		_, err := db.Exec(`INSERT INTO blocks(hash, firstseen) VALUES($1, $2)`,
 			hash, time.Now())
+		if err != nil {
+			logger.Println(err)
+		}
 
 		if err, ok := err.(*pq.Error); ok {
 			logger.Println("pq error:", err.Code.Name())
@@ -109,7 +108,7 @@ func rpcroutine(rpcchan <-chan *ResConn) {
 		// reported from an external data source
 		select {
 		case <-tick:
-			logger.Println("ticked for rpc")
+			//logger.Println("ticked for rpc")
 			// try to recieve from future
 			txmempool, err = mempoolfut.Receive()
 			if err != nil {
@@ -135,8 +134,13 @@ func rpcroutine(rpcchan <-chan *ResConn) {
 }
 
 func txroutine(rpcchan chan *ResConn, txmeta *watchtower.TxMeta) {
-	txid, _ := txmeta.MsgTx.TxSha()
-	kind := selectKind(txmeta.MsgTx)
+	txid, err := txmeta.MsgTx.TxSha()
+	if err != nil {
+		logger.Println(err)
+		return
+	}
+	counts := btcbuilder.ExtractOutScripts(txmeta.MsgTx)
+	kind := btcbuilder.SelectKind(txmeta.MsgTx)
 	now := time.Now()
 	size := txmeta.MsgTx.SerializeSize()
 
@@ -147,11 +151,6 @@ func txroutine(rpcchan chan *ResConn, txmeta *watchtower.TxMeta) {
 		Chan: jsonChan,
 	}
 
-	conn, err := sql.Open("postgres", connurl)
-	if err != nil {
-		logger.Println(err)
-		return
-	}
 	var extra bool
 	var fee int64
 	var priority float64
@@ -167,32 +166,58 @@ func txroutine(rpcchan chan *ResConn, txmeta *watchtower.TxMeta) {
 
 	case mempooljson = <-jsonChan:
 		amnt, _ := btcutil.NewAmount(mempooljson.Fee)
+		logger.Println(amnt)
 		// The goods!
 		extra = true
 		fee = int64(amnt)
 		priority = mempooljson.StartingPriority
 
 	}
-
-	insert_new := `
-	INSERT INTO txs(txid, kind, firstseen, size, extra, fee, priority) 
-		SELECT $1, $2, $3, $4, $5, $6, $7
-		WHERE NOT EXISTS (
-			SELECT * FROM txs WHERE txid=$1
-		);
-	`
-	_, err = conn.Exec(insert_new, txid.Bytes(), kind, now, size, extra, fee, priority)
+	txbytes := txid.Bytes()
+	dbTx, err := db.Begin()
 	if err != nil {
 		logger.Println(err)
 		return
 	}
 
+	featStmt, err := dbTx.Prepare(`
+	INSERT INTO tx_features(txid, nonstandard, pubkey, pubkeyhash, scripthash, multisig, nulldata)
+		SELECT $1, $2, $3, $4, $5, $6, $7
+		WHERE NOT EXISTS (
+			SELECT * FROM tx_features WHERE txid=$1
+		);
+	`)
+	if err != nil {
+		logger.Println(err)
+	}
+	_, err = featStmt.Exec(txbytes, counts[NonStandard], counts[PubKey], counts[PubKeyHash],
+		counts[ScriptHash], counts[MultiSig], counts[NullData])
+	if err != nil {
+		logger.Println(err)
+	}
+
+	upStmt, _ := dbTx.Prepare(`
+	INSERT INTO txs(txid, kind, firstseen, size, extra, fee, priority)
+		SELECT $1, $2, $3, $4, $5, $6, $7
+		WHERE NOT EXISTS (
+			SELECT * FROM txs WHERE txid=$1
+		);
+	`)
+	_, err = upStmt.Exec(txbytes, kind, now, size, extra, fee, priority)
+	if err != nil {
+		logger.Println(err)
+	}
+
 	if txmeta.BlockSha != nil {
-		_, err = conn.Exec(`INSERT INTO relations(txid, block) VALUES($1, $2)`,
+		_, err = dbTx.Exec(`INSERT INTO relations(txid, block) VALUES($1, $2)`,
 			txid.Bytes(), txmeta.BlockSha)
 		if err != nil {
 			logger.Println(err)
-			return
 		}
+	}
+
+	err = dbTx.Commit()
+	if err != nil {
+		logger.Println(err)
 	}
 }
