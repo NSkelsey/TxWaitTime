@@ -8,6 +8,7 @@ import (
 	"watchtower"
 
 	"github.com/NSkelsey/btcbuilder"
+	"github.com/NSkelsey/watchtower"
 	"github.com/conformal/btcjson"
 	"github.com/conformal/btcrpcclient"
 	"github.com/conformal/btcscript"
