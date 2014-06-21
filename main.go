@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"time"
-	"watchtower"
 
 	"github.com/NSkelsey/btcbuilder"
 	"github.com/NSkelsey/watchtower"
@@ -36,6 +35,8 @@ type ResConn struct {
 }
 
 func main() {
+	client, netparams := btcbuilder.ConfigureApp()
+	addr := "127.0.0.1:" + netparams.DefaultPort
 
 	connurl := "postgres://postgres:obscureref@localhost/txwaittime"
 	var err error
@@ -48,7 +49,7 @@ func main() {
 
 	rpcchan := make(chan *ResConn)
 
-	go rpcroutine(rpcchan)
+	go rpcroutine(client, rpcchan)
 
 	// give the rpcroutine time to get some data
 	time.Sleep(1)
@@ -79,24 +80,12 @@ func main() {
 	}
 
 	// Pass in closures and let them work
-	watchtower.Create(txParser, blockParser)
+	watchtower.Create(addr, netparams.Net, txParser, blockParser)
 }
 
-func rpcroutine(rpcchan <-chan *ResConn) {
-	connCfg := btcrpcclient.ConnConfig{
-		Host:         "localhost:18332",
-		User:         "bitcoinrpc",
-		Pass:         "EhxWGNKr1Z4LLqHtfwyQDemCRHF8gem843pnLj19K4go",
-		HttpPostMode: true,
-		DisableTLS:   true,
-	}
+func rpcroutine(client *btcrpcclient.Client, rpcchan <-chan *ResConn) {
 
-	client, err := btcrpcclient.New(&connCfg, nil)
-	if err != nil {
-		logger.Fatal(err)
-	}
-
-	// fuck this variable :-/
+	// This variable is a big unknown :-/
 	var mempoolfut btcrpcclient.FutureGetRawMempoolVerboseResult
 
 	tick := time.Tick(500 * time.Millisecond)
@@ -111,6 +100,7 @@ func rpcroutine(rpcchan <-chan *ResConn) {
 		case <-tick:
 			//logger.Println("ticked for rpc")
 			// try to recieve from future
+			var err error
 			txmempool, err = mempoolfut.Receive()
 			if err != nil {
 				logger.Println(err)
@@ -135,6 +125,12 @@ func rpcroutine(rpcchan <-chan *ResConn) {
 }
 
 func txroutine(rpcchan chan *ResConn, txmeta *watchtower.TxMeta) {
+	var now time.Time
+	if txmeta.BlockSha != nil {
+		now = txmeta.Time
+	} else {
+		now = time.Now()
+	}
 	txid, err := txmeta.MsgTx.TxSha()
 	if err != nil {
 		logger.Println(err)
@@ -142,7 +138,6 @@ func txroutine(rpcchan chan *ResConn, txmeta *watchtower.TxMeta) {
 	}
 	counts := btcbuilder.ExtractOutScripts(txmeta.MsgTx)
 	kind := btcbuilder.SelectKind(txmeta.MsgTx)
-	now := time.Now()
 	size := txmeta.MsgTx.SerializeSize()
 
 	jsonChan := make(chan btcjson.GetRawMempoolResult, 1)
