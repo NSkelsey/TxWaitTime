@@ -95,7 +95,7 @@ SELECT kind,
                -- TODO runs for every row!
                4000,--max_conftime('pubkeyhash'),
                90
-        ), 
+        ) AS c, 
         count(*)
         FROM included
         WHERE kind = 'pubkeyhash'
