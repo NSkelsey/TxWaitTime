@@ -1,0 +1,25 @@
+
+# from apt-get
+libpython2.7-dev
+nginx
+postgresql-9.3 # questionable
+supervisor
+libpq-dev
+
+# from tarball or source
+redis
+golang
+
+# from language dep managers
+# go root set before go get
+go get github.com/NSkelsey/TxWaitTime
+pip install celery[redis]
+pip install psycopg2
+pip install sqlalchemy supervisor flask
+
+# system config needed
+GOPATH GOROOT
+/etc/supervisor/*.conf
+
+
+
