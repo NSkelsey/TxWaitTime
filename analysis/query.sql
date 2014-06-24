@@ -38,14 +38,15 @@ SELECT t.*,
 ;
 
 -- avg confirmation time for the last week
+CREATE OR REPLACE VIEW avg_conf_time AS
 SELECT included.kind, avg(included.conf_time) 
     FROM blocks INNER JOIN included ON 
     (included.block = blocks.hash)
     GROUP BY included.kind
 ;
 
-
 -- transaction confirmation rates for the week
+CREATE OR REPLACE VIEW conf_rates AS
 WITH included AS (
     SELECT included.kind, count(*) AS confirmed
         FROM included
@@ -59,7 +60,6 @@ WITH included AS (
         FROM forgotten
         GROUP BY kind
 )
-
 SELECT included.kind, t.forgotten, t.mempool, included.confirmed 
     FROM (
         SELECT mempool.kind, 
@@ -70,6 +70,7 @@ SELECT included.kind, t.forgotten, t.mempool, included.confirmed
     ) AS t FULL OUTER JOIN included ON
     t.kind = included.kind
 ;
+
 
 -- computes the max confirmation time for a given kind
 CREATE OR REPLACE FUNCTION max_conftime(kinds) RETURNS float AS $$
@@ -84,12 +85,15 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+
 -- histograms of tx confirmation times 
+CREATE OR REPLACE VIEW pubkey_histogram AS
 SELECT kind, 
        width_bucket(
                extract(epoch FROM included.conf_time), 
                -1,
-               max_conftime('pubkeyhash'),
+               -- TODO runs for every row!
+               4000,--max_conftime('pubkeyhash'),
                90
         ), 
         count(*)
@@ -100,4 +104,7 @@ SELECT kind,
 ;
 
 
-
+-- Execute external views
+SELECT * FROM avg_conf_time;
+SELECT * FROM conf_rates;
+SELECT * FROM pubkey_histogram;
