@@ -2,16 +2,17 @@ import datetime
 
 from redis import Redis
 
-from flask import Flask, render_template
+from flask import Flask, render_template, Response
 
-app = Flask(__name__)
+app = Flask(__name__, static_url_path='/static')
 
 conn = Redis('localhost', db=7)
 
 
 @app.route('/')
 def home():
-    last_update = conn.get('latest')
+    last_up = conn.get('latest')
+    last_update = datetime.datetime.strptime(last_up, "%Y-%m-%d %H:%M:%S.%f")
     avg_conf_times = conn.get('avg_conf_time')
     conf_rates = conn.get('conf_rates')
     pubkey_histogram = conn.get('pubkey_histogram')
@@ -22,6 +23,12 @@ def home():
             pubkey_histogram=pubkey_histogram,
             )
 
+@app.route('/json/<string:key>/')
+def jsonget(key):
+    # pulls key from redis does no processing
+    result = conn.get(key)
+    return Response(result, mimetype='application/json')
+
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=1011, debug=True)

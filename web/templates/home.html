@@ -1,17 +1,84 @@
+<!doctype html>
 <html>
     <head>
-
+        <link rel="stylesheet" type="text/css" href=https://maxcdn.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css />
+        <link rel="stylesheet" type="text/css" href={{ url_for('static', filename='site.css') }} />
     </head>
-    <body>
+    <body data-spy="scroll" data-target="#affix-nav">
+        <div class="container">
+            <div class="row">
+                <div id="content" class="col-md-10">
+                    <div id="summary" >
+                        <div class="page-header">
+                            <h1>Transacation Wait Times</h1>
+                            <small>Last updated: {{ last_update.strftime('%H:%M') }}</small>
+                        </div>
 
-    <script>
-    var avg_conf_time = {{ avg_conf_times | safe }};
-    var conf_rates = {{ conf_rates | safe }};
-    var pubkey_histogram = {{ pubkey_histogram | safe  }};
-    </script>
-    <div>
-        Last update: {{ last_update }}
-   </div>
+                        <p>This webpage displays statistics about Bitcoin transactions as they are broadcast into the network and saved in the blockchain.</p>
 
+                        <div id="sum-row" class="row">
+                        </div>
+                    </div>
+                    <div id="standard">
+                        <h2>Standard</h2>
+
+                        <p></p>
+                    </div>
+                    <div id="multisig">
+                        <h2>Multisignature</h2>
+                    </div>
+                </div>
+                <nav id="affix-nav" class="sidebar col-md-2">
+                <ul class="nav sidenav" data-spy="affix" data-offset-top="10">
+                    <!-- affix hacks -->
+                    <li class="active"><a href="#summary">Summary</a></li>
+                    <li><a href="#standard">Standard</a></li>
+                    <li><a href="#multisig">Multisignature</a></li>
+                    <li><a href="#redeemscript">Redeem Scripts</a></li>
+                    <li><a href="#nulldata">Null Data</a></li>
+                    <li><a href="#bulletin">Bulletins</a></li>
+                </ul>
+                </nav>
+            </div> <!-- close row -->
+        </div> <!-- close container -->
+
+        <!-- Included Javascript for bootstrap and d3 -->
+        <script src=https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.1/jquery.min.js></script>
+        <script src="http://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.0.0-rc2/js/bootstrap.min.js"></script>
+        <script src="http://cdnjs.cloudflare.com/ajax/libs/d3/3.3.13/d3.js" ></script>
+
+        <!-- graph generating js -->
+        <script src="{{ url_for('static', filename='graphs.js') }}"></script>
+        <script>
+            var avg_conf_time = {{ avg_conf_times | safe }};
+            var conf_rates = {{ conf_rates | safe }};
+            var pubkey_histogram = {{ pubkey_histogram | safe  }};
+
+
+            var sel = d3.select("#sum-row");
+
+            var summaryMaker = AvgTime();
+
+            summaryMaker(sel, avg_conf_time, conf_rates);
+
+            /*
+            d3.json("/avg_conf_time", function(json){
+                charts = sheets()  
+                var selection = d3.select("#standardchart");
+                charts[0](selection);
+            });
+
+            d3.json("/conf_rates", function(json){
+                charts = sheets()  
+                var selection = d3.select("#standardchart");
+                charts[0](selection);
+            });
+
+            d3.json("/pubkey_histogram", function(json){
+                charts = sheets()  
+                var selection = d3.select("#standardchart");
+                charts[0](selection);
+            });*/
+        </script>
     </body>
-</html
+</html>

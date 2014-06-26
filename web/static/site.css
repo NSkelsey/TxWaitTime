@@ -1,0 +1,86 @@
+h1 .small {
+    float: right;
+}
+
+h3.kind-title {
+    text-align: center;
+}
+
+h3.time-est {
+    text-align: center;
+}
+
+.sidenav > li.active > a {
+    border-left: 2px solid #563d7c;
+}
+
+ul.affix-top {
+    position: static;
+}
+ul.affix-bottom {
+    position: absolute;
+}
+
+
+
+/* First level of nav */
+.sidenav {
+    margin-top: 30px;
+    margin-bottom: 30px;
+    padding-top:    10px;
+    padding-bottom: 10px;
+    border-radius: 5px;
+}
+
+
+
+.sidebar .nav > .active > a,
+.sidebar .nav > .active:hover > a,
+.sidebar .nav > .active:focus > a {
+    font-weight: bold;
+    color: #563d7c;
+    background-color: transparent;
+}
+
+h2 {
+    text-transform: capitalize;
+    font-size: 2.5em;
+    color: #333;
+}
+
+/* summary d3 attrs */
+div.sum-entry h2.kind{
+    text-align: center;
+    font-size: 2.5em;
+}
+
+div.sum-entry b {
+    display: block;
+    text-align:center;
+    font-size: 2em;
+}
+
+div.sum-entry h3.kind:hover,
+div.sum-entry h3.kind:focus,
+{
+    color: #333;
+}
+
+div.sum-entry svg
+{
+    display: block;
+    margin: auto;
+}
+
+div.sum-entry svg text {
+    text-anchor: middle;
+    font-weight: bold;
+    dominant-baseline: central;
+}
+
+div ~ aside  {
+    font-size: small;
+    left: 0;
+    postion: absolute;
+    width: 180px;
+}
