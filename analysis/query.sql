@@ -39,7 +39,9 @@ SELECT t.*,
 
 -- avg confirmation time for the last week
 CREATE OR REPLACE VIEW avg_conf_time AS
-SELECT included.kind, avg(included.conf_time) 
+SELECT included.kind, 
+    EXTRACT(EPOCH FROM avg(included.conf_time)) as avg,
+    count(*) as confirmed
     FROM blocks INNER JOIN included ON 
     (included.block = blocks.hash)
     GROUP BY included.kind
@@ -60,7 +62,7 @@ WITH included AS (
         FROM forgotten
         GROUP BY kind
 )
-SELECT included.kind, t.forgotten, t.mempool, included.confirmed 
+SELECT included.kind, t.forgotten, t.mempool, inlcuded.unseen, included.confirmed 
     FROM (
         SELECT mempool.kind, 
                  mempool.total AS mempool,
@@ -95,7 +97,7 @@ SELECT kind,
                -- TODO runs for every row!
                4000,--max_conftime('pubkeyhash'),
                90
-        ) AS c, 
+        ) AS col, 
         count(*)
         FROM included
         WHERE kind = 'pubkeyhash'

@@ -36,6 +36,7 @@ class Interface():
         self.dbconn.close()
         self.redis.set('latest', datetime.now())
         # I am assuming redis knows how to close itself
+        print "Conns closed"
 
     def avg_conf_time(self):
         # avg confirmation time for the last week

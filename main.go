@@ -16,7 +16,7 @@ import (
 	"github.com/lib/pq"
 )
 
-var logger *log.Logger = log.New(os.Stdout, "", log.Ltime|log.Llongfile)
+var logger *log.Logger = log.New(os.Stdout, "", log.Ltime|log.Ldate)
 var db *sql.DB
 
 // some golang ugliness
@@ -55,7 +55,6 @@ func main() {
 	time.Sleep(1)
 
 	txParser := func(txmeta *watchtower.TxMeta) {
-		logger.Println("Saw tx")
 
 		go txroutine(rpcchan, txmeta)
 	}
@@ -79,8 +78,17 @@ func main() {
 		}
 	}
 
+	height, err := client.GetBlockCount()
+	dieWith(err)
+
+	cfg := watchtower.TowerCfg{
+		StartHeight: height,
+		Net:         netparams.Net,
+		Addr:        addr,
+	}
+
 	// Pass in closures and let them work
-	watchtower.Create(addr, netparams.Net, txParser, blockParser)
+	watchtower.Create(cfg, netparams.Net, txParser, blockParser)
 }
 
 func rpcroutine(client *btcrpcclient.Client, rpcchan <-chan *ResConn) {
@@ -178,10 +186,10 @@ func txroutine(rpcchan chan *ResConn, txmeta *watchtower.TxMeta) {
 
 	featStmt, err := dbTx.Prepare(`
 	INSERT INTO tx_features(txid, nonstandard, pubkey, pubkeyhash, scripthash, multisig, nulldata)
-		SELECT $1, $2, $3, $4, $5, $6, $7
-		WHERE NOT EXISTS (
-			SELECT * FROM tx_features WHERE txid=$1
-		);
+	SELECT $1, $2, $3, $4, $5, $6, $7
+	WHERE NOT EXISTS (
+		SELECT * FROM tx_features WHERE txid=$1
+	);
 	`)
 	if err != nil {
 		logger.Println(err)
@@ -194,10 +202,10 @@ func txroutine(rpcchan chan *ResConn, txmeta *watchtower.TxMeta) {
 
 	upStmt, _ := dbTx.Prepare(`
 	INSERT INTO txs(txid, kind, firstseen, size, extra, fee, priority)
-		SELECT $1, $2, $3, $4, $5, $6, $7
-		WHERE NOT EXISTS (
-			SELECT * FROM txs WHERE txid=$1
-		);
+	SELECT $1, $2, $3, $4, $5, $6, $7
+	WHERE NOT EXISTS (
+		SELECT * FROM txs WHERE txid=$1
+	);
 	`)
 	_, err = upStmt.Exec(txbytes, kind, now, size, extra, fee, priority)
 	if err != nil {

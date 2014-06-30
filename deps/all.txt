@@ -21,5 +21,7 @@ pip install sqlalchemy supervisor flask
 GOPATH GOROOT
 /etc/supervisor/*.conf
 
+mkdir /var/log/txwaittime
+mkdir /var/run/txwaittime
 
 
