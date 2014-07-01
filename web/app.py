@@ -15,12 +15,12 @@ def home():
     last_update = datetime.datetime.strptime(last_up, "%Y-%m-%d %H:%M:%S.%f")
     avg_conf_times = conn.get('avg_conf_time')
     conf_rates = conn.get('conf_rates')
-    pubkey_histogram = conn.get('pubkey_histogram')
+    every_histogram = conn.get('every_histogram')
     return render_template('home.html', 
             last_update=last_update,
             avg_conf_times=avg_conf_times,
             conf_rates=conf_rates,
-            pubkey_histogram=pubkey_histogram,
+            every_histogram=every_histogram,
             )
 
 @app.route('/json/<string:key>/')
@@ -31,4 +31,4 @@ def jsonget(key):
 
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=1011, debug=True)
+    app.run(host="0.0.0.0", debug=True)

@@ -9,41 +9,28 @@
             <div class="row">
                 <div id="content" class="col-md-10">
                     <div id="summary" >
+                        <p class="head">An <a href="http://ahimsa.io">ahimsa</a> tool<br / > Last updated: {{ last_update.strftime('%H:%M') }}</p>
                         <div class="page-header">
                             <h1>Transacation Wait Times</h1>
-                            <small>Last updated: {{ last_update.strftime('%H:%M') }}</small>
                         </div>
 
                         <p>This webpage displays statistics about Bitcoin transactions as they are broadcast into the network and saved in the blockchain.</p>
 
                         <div id="sum-row" class="row">
                         </div>
-                    </div>
-                    <div id="standard">
-                        <h2>Standard</h2>
-
-                        <p></p>
-                    </div>
-                    <div id="multisig">
-                        <h2>Multisignature</h2>
-                    </div>
+                   </div>
                 </div>
                 <nav id="affix-nav" class="sidebar col-md-2">
-                <ul class="nav sidenav" data-spy="affix" data-offset-top="10">
+                <ul class="nav sidenav" id="affix-ul" data-spy="affix" data-offset-top="10">
                     <!-- affix hacks -->
                     <li class="active"><a href="#summary">Summary</a></li>
-                    <li><a href="#standard">Standard</a></li>
-                    <li><a href="#multisig">Multisignature</a></li>
-                    <li><a href="#redeemscript">Redeem Scripts</a></li>
-                    <li><a href="#nulldata">Null Data</a></li>
-                    <li><a href="#bulletin">Bulletins</a></li>
                 </ul>
                 </nav>
             </div> <!-- close row -->
         </div> <!-- close container -->
 
         <!-- Included Javascript for bootstrap and d3 -->
-        <script src=https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.1/jquery.min.js></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
         <script src="http://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.0.0-rc2/js/bootstrap.min.js"></script>
         <script src="http://cdnjs.cloudflare.com/ajax/libs/d3/3.3.13/d3.js" ></script>
 
@@ -52,14 +39,81 @@
         <script>
             var avg_conf_time = {{ avg_conf_times | safe }};
             var conf_rates = {{ conf_rates | safe }};
-            var pubkey_histogram = {{ pubkey_histogram | safe  }};
+            var every_histogram = {{ every_histogram | safe  }};
 
+            var nameMap = {
+               pubkeyhash : "Standard",
+               nulldata   : "Null Data",
+               scripthash : "Script Hash",
+               pubkey     : "Public Key",
+               multisig   : "Multisignature",
+               nonstandard: "Nonstandard",
+            };
+
+            // finds specific object with kind and copies and deletes the label
+            function find_kind(kind, obj_arr) {
+                var found = null;
+                obj_arr.forEach(function(obj) {
+                    if (obj["kind"] === kind) {
+                        // copy obj
+                        found = JSON.parse(JSON.stringify(obj));
+                        delete found["kind"]
+                        return;
+                    }
+                });
+                if (found === null) {
+                    throw "kind not found " + kind;
+                }
+                return found;
+            }
 
             var sel = d3.select("#sum-row");
 
             var summaryMaker = AvgTime();
 
+            // Make summary graphs.
             summaryMaker(sel, avg_conf_time, conf_rates);
+
+            var histBuilder = Histogram();
+            var pieBuilder = PieChart();
+
+            // Add kinds to body content using d3
+            var bodyContent = d3.select("#content");
+            
+            var kinds = Object.keys(nameMap);
+
+            var divs = bodyContent.selectAll("div.detail")
+                .data(kinds).enter()
+              .append("div")
+                .attr("id", function(k){ return k})
+                .attr("class", "detail");
+
+            divs.append("div")
+                .attr("class", "section-header")
+              .append("h3")
+                .attr("class", "h1")
+                .text(function(k){ return nameMap[k] });
+
+                
+            // 
+            kinds.forEach(function(kind){
+                // Add to navbar.
+                var navBar = $("#affix-ul");
+                var name = nameMap[kind];
+                var navHtml = '<li><a href="#'+kind+'">'+name+'</a></li>';
+
+                navBar.append($.parseHTML(navHtml));
+
+                // Selects added kind and generates graphs
+                var selection = d3.select("#" + kind);
+
+                var histogram = every_histogram[kind]["histogram_data"];
+                histBuilder(selection, histogram);
+
+                var confRates = find_kind(kind, conf_rates);
+                pieBuilder(selection, confRates);
+            });
+
 
             /*
             d3.json("/avg_conf_time", function(json){

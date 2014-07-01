@@ -1,5 +1,17 @@
-h1 .small {
+
+p.head {
     float: right;
+    color: #999;
+    font-weight: 400;
+    font-size: 1em;
+    display: inline;
+    text-align: right;
+    margin-top: 18px;
+
+}
+
+.page-header h1 {
+    display: inline-block;
 }
 
 h3.kind-title {
@@ -16,6 +28,7 @@ h3.time-est {
 
 ul.affix-top {
     position: static;
+    margin-top: 47px;
 }
 ul.affix-bottom {
     position: absolute;
@@ -78,9 +91,49 @@ div.sum-entry svg text {
     dominant-baseline: central;
 }
 
-div ~ aside  {
-    font-size: small;
-    left: 0;
-    postion: absolute;
-    width: 180px;
+/* d3 styles */
+.axis path,
+.axis line {
+    fill: none;
+    stroke: #000;
+    shape-rendering: crispEdges;
+}
+
+.x.axis path {
+    display: none;
+}
+
+.arc path {
+    stroke: #fff;
+}
+
+div.detail {
+   padding-top: 5px;
+}
+
+.section-header {
+   border-bottom: 1px solid #E3E3E3;
+   padding-bottom: 10px;
+}
+
+.pie-chart {
+    display: flex;
+}
+
+.pie-chart table td, tr {
+    padding: 5px;
+} 
+
+.pie-chart table td:nth-child(2) {
+    text-align: left;
+}
+
+.pie-chart table td:nth-child(3),
+.pie-chart table td:nth-child(4) {
+    text-align: right;
+}
+
+.pie-chart table tr:last-child {
+    padding-top: 4px;
+    border-top: solid 1px black;
 }

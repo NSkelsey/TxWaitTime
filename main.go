@@ -59,13 +59,13 @@ func main() {
 		go txroutine(rpcchan, txmeta)
 	}
 
-	blockParser := func(block *btcwire.MsgBlock) {
+	blockParser := func(now time.Time, block *btcwire.MsgBlock) {
 		logger.Println("Saw block")
 		_hash, _ := block.BlockSha()
 		hash := _hash.Bytes()
 		// insert block
 		_, err := db.Exec(`INSERT INTO blocks(hash, firstseen) VALUES($1, $2)`,
-			hash, time.Now())
+			hash, now)
 		if err != nil {
 			logger.Println(err)
 		}

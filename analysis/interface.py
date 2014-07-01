@@ -28,6 +28,12 @@ class Interface():
     def __init__(self):
         self.dbconn = engine.connect()
         self.redis  = Redis(host='localhost', db=7)
+        
+        # get kinds from db
+        cur = dbconn.execute("""
+        SELECT kind FROM txs GROUP BY kind
+        """)
+        self.kinds = cur.fetchall() 
 
     def __enter__(self):
         return self
@@ -57,13 +63,23 @@ class Interface():
         self.redis.set('conf_rates', res)
 
     def pubkey_histogram(self):
-        # histogram of p2pkh confirmation times
-        pubkey_histogram = """
-        SELECT row_to_json(pubkey_histogram) FROM pubkey_histogram
+        histo_stats_query = """
+        SELECT row_to_json(conf_time_stats(kind)) FROM txs GROUP BY kind
         """
-        res = dbconn.execute(pubkey_histogram).fetchall()
-        res = unpack(res)
-        self.redis.set('pubkey_histogram', res)
+        hstats = dbconn.execute(histo_stats_query).fetchall()
+        all_hists = {row[0]['kind'] : row[0] for row in hstats} 
+
+        # histogram of confirmation times for each kind
+        # , unpacks tuple
+        for kind, in self.kinds:
+            obj_dict = dict(kind=kind)
+            histogram_query = """
+            SELECT row_to_json(cth.*) FROM conf_time_histogram('{}') AS cth
+            """.format(kind)
+            res = dbconn.execute(histogram_query).fetchall()
+            all_hists[kind]['histogram_data'] = [row[0] for row in res]
+
+        self.redis.set('every_histogram', json.dumps(all_hists))
 
 
 if __name__ == '__main__':
@@ -72,4 +88,5 @@ if __name__ == '__main__':
         glue.avg_conf_time()
         glue.conf_rates()
         glue.pubkey_histogram()
-
+        print json.loads(glue.redis.get('every_histogram'))
+        print glue.redis.get('latest')

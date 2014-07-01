@@ -31,7 +31,8 @@ CREATE TABLE tx_features (
 
 CREATE TABLE blocks (
     hash        bytea primary key,
-    firstseen   timestamp
+    firstseen   timestamp,
+    prevhash    bytea
 );
 
 CREATE TABLE relations (
