@@ -137,3 +137,19 @@ div.detail {
     padding-top: 4px;
     border-top: solid 1px black;
 }
+
+.scale-box {
+    opacity: 0.75;
+}
+
+.scale-box .small {
+   fill: #42d6c7;
+}
+
+.scale-box .avg {
+    fill: #73f544;
+}
+
+.scale-box .large {
+    fill: #f0b24d;
+}
