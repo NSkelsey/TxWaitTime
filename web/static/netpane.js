@@ -32,7 +32,7 @@ function NetPane(selection) {
             y = chart.yScale;
 
             sizeBox = svg.append("g")
-                .attr("transform", "translate("+(margin.left)+","+margin.top+")")
+                .attr("transform", "translate("+(margin.left/2)+","+margin.top+")")
                 .attr("class", "scale-box")
 
             sizeBox.append("rect")
