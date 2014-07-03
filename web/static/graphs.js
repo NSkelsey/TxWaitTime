@@ -3,9 +3,10 @@ function AvgTime() {
 // Also adds a porportion chart to confirmation time
     var width = 250,
     height = 150
-    maxRad = (height)/2 - 10;
+    maxRad = (height)/2 - 10
+    color = undefined;
 
-    function builder(selection, summary_data) {
+    function chart(selection, summary_data) {
         // filters out data with negative wait times and sorts by size
 
         summary_data = summary_data.sort(function(a, b) {
@@ -60,10 +61,10 @@ function AvgTime() {
            .domain([1, d3.max(summary_data, function(d){return d.confirmed})])
            .range([5, maxRad]);
 
-        // http://bl.ocks.org/mbostock/3887235
-        var colorCat = d3.scale.category20()
-            .domain(d3.map(avg_conf_time, function(d){return d.kind}))
-
+        if (color === undefined) {
+            color = d3.scale.category20()
+                .domain(d3.map(avg_conf_time, function(d){return d.kind}))
+        }
 
         var sizeChart = divEnter.append("svg")
             .style("width", width)
@@ -75,7 +76,7 @@ function AvgTime() {
                   )
             .attr("cx", width/2)
             .attr("cy", height/2)
-            .style("fill", function(d) { return colorCat(d.kind) })
+            .style("fill", function(d) { return color(d.kind) })
 
         sizeChart.append("text")
             .attr("x", width/2)
@@ -84,7 +85,14 @@ function AvgTime() {
 
     }
 
-    return builder
+    chart.color = function(_){
+        if (!arguments.length) return color;
+        color = _;
+        return chart
+    }
+
+
+    return chart
 }
 
 

@@ -17,8 +17,17 @@
                         <p>This webpage displays statistics about Bitcoin transactions as they are broadcast into the network and saved in the blockchain.</p>
 
                         <div id="sum-row" class="row">
+                            <svg id="netpane">
+                                <g transform="translate(20, 120)">
+                                <path
+                                d="m 0.03125,0.0625 0,0.46583625 0.6875,-0.46583625 -0.6875,0 z m 3.21875,0 -3.21875,2.2049582 0,4.3167493 L 9.5,0.0625 l -6.25,0 z m 8.8125,0 -12.03125,8.2608294 0,4.3167496 18.25,-12.577579 -6.21875,0 z m 8.09375,0.46583625 -20.125,13.85086475 0,4.316749 20.125,-13.8819203 0,-4.28569345 z m 0,6.05587125 -20.125,13.8819205 0,4.285693 20.125,-13.88192 0,-4.2856935 z m 0,6.0558715 -20.125,13.850864 0,4.316749 20.125,-13.88192 0,-4.285693 z m 0,6.055871 -20.125,13.88192 0,4.285694 20.125,-13.881921 0,-4.285693 z m 0,6.055871 -20.125,13.850865 0,1.428564 4.21875,0 15.90625,-10.993735 0,-4.285694 z m 0,6.055871 -13.375,9.223558 6.25,0 7.125,-4.937864 0,-4.285694 z m 0,6.055872 -4.59375,3.167686 0.6875,0 3.90625,0 0,-3.167686 z"
+                                style="fill:#00d400;fill-opacity:0.2658984;stroke-width:0.05;stroke-miterlimit:4;stroke-dasharray:none;display:inline" />
+                                </g>
+
+
+                            </svg>
                         </div>
-                   </div>
+                    </div>
                 </div>
                 <nav id="affix-nav" class="sidebar col-md-2">
                 <ul class="nav sidenav" id="affix-ul" data-spy="affix" data-offset-top="10">
@@ -36,18 +45,22 @@
 
         <!-- graph generating js -->
         <script src="{{ url_for('static', filename='graphs.js') }}"></script>
+        <script src="{{ url_for('static', filename='netpane.js') }}"></script>
         <script>
+
+
+
             var avg_conf_time = {{ avg_conf_times | safe }};
             var conf_rates = {{ conf_rates | safe }};
             var every_histogram = {{ every_histogram | safe  }};
 
             var nameMap = {
-               pubkeyhash : "Standard",
-               nulldata   : "Null Data",
-               scripthash : "Script Hash",
-               pubkey     : "Public Key",
-               multisig   : "Multisignature",
-               nonstandard: "Nonstandard",
+                pubkeyhash : "Standard",
+                nulldata   : "Null Data",
+                scripthash : "Script Hash",
+                pubkey     : "Public Key",
+                multisig   : "Multisignature",
+                nonstandard: "Nonstandard",
             };
 
             // finds specific object with kind and copies and deletes the label
@@ -67,34 +80,79 @@
                 return found;
             }
 
-            var sel = d3.select("#sum-row");
+            // Build everything in summary first
+            var sumRow = d3.select("#sum-row");
+            // Setup the Bitcoin Network Panel.
+            var websocket = new WebSocket("ws://ahimsa.io:1034/ws");
 
-            var summaryMaker = AvgTime();
+            var catColor = d3.scale.category20()
+            .domain(Object.keys(nameMap));
+
+            var netpane = NetPane()
+            .color(catColor);
+
+            netpane.draw(sumRow.select("svg"));
+
+
+            websocket.onmessage = function(event) {
+                // make async so the socket can live
+                var json = JSON.parse(event.data);
+                console.log(json);
+                netpane.addObject(json);
+            }
+
+
+            function addShit() { 
+                y = 100
+                now = new Date()
+                thwap = {
+                    type: "tx",
+                    txid: "blah",
+                    kind: "pubkeyhash", 
+                    size: y + Math.random()*503,
+                    time: now
+                }
+                blap = {
+                    type: "tx",
+                    txid: "blap",
+                    kind: "pubkeyhash", 
+                    size: y + Math.random()*700,
+                    time: now 
+                }
+                netpane.addObject(blap);
+                netpane.addObject(thwap);
+            }
+            addShit()
+            //setInterval(addShit, 4000);
+
+
+            var summaryMaker = AvgTime()
+            .color(catColor);
 
             // Make summary graphs.
-            summaryMaker(sel, avg_conf_time, conf_rates);
+            summaryMaker(sumRow, avg_conf_time, conf_rates);
 
             var histBuilder = Histogram();
             var pieBuilder = PieChart();
 
             // Add kinds to body content using d3
             var bodyContent = d3.select("#content");
-            
+
             var kinds = Object.keys(nameMap);
 
             var divs = bodyContent.selectAll("div.detail")
-                .data(kinds).enter()
-              .append("div")
-                .attr("id", function(k){ return k})
-                .attr("class", "detail");
+            .data(kinds).enter()
+            .append("div")
+            .attr("id", function(k){ return k})
+            .attr("class", "detail");
 
             divs.append("div")
-                .attr("class", "section-header")
-              .append("h3")
-                .attr("class", "h1")
-                .text(function(k){ return nameMap[k] });
+            .attr("class", "section-header")
+            .append("h3")
+            .attr("class", "h1")
+            .text(function(k){ return nameMap[k] });
 
-                
+
             // 
             kinds.forEach(function(kind){
                 // Add to navbar.
