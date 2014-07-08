@@ -91,6 +91,8 @@
                 // make async so the socket can live
                 var json = JSON.parse(event.data);
                 console.log(json);
+                var now = new Date()
+                console.log(now)
                 netpane.addObject(json);
             }
 
@@ -114,6 +116,15 @@
                 }
                 netpane.addObject(blap);
                 netpane.addObject(thwap);
+            
+                block = {
+                    type: "block",
+                    hash: "derpderpderp",
+                    size: "23434",
+                    time: now
+                }
+
+                netpane.addObject(block);
             }
             addShit()
             //setInterval(addShit, 4000);

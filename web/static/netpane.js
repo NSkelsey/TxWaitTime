@@ -20,8 +20,8 @@ function NetPane(selection) {
                 .attr("height", height);
 
             //
-            var yDom = [34, 170, 350, 10000];
-            var yRan = [height, 2*height/3, height/3, 0];
+            var yDom = [100, 350, 10000];
+            var yRan = [height, height/3, 0];
 
             // Build scales
             chart.yScale = d3.scale.linear()
@@ -112,25 +112,15 @@ function NetPane(selection) {
         window.open(url, '_blank');
     }
 
-    chart.update = function(obj){
+    chart.addTx = function(tx){
         var c = chart;
-//        arrdata = Object.keys(c.data).map(function(k){ return c.data[k]; })
-//        
-//        var join = chart.g.selectAll(".elem")
-//            .data(arrdata, function(d) { return id(d); })
 
-
-        //join.attr("class", "update")
-
-        // Item enter
-        chart.g.append("circle").datum(obj)
+        // tx lifespan
+        chart.g.append("circle").datum(tx)
             .attr("class", "tx")
             .on("click", openLink)
             .attr("r", 0)
-            .attr("cx", function(d) { 
-                d.start_x = (width - 20) + Math.random()*20;
-                return d.start_x;
-            })
+            .attr("cx", randomXStart)
             .attr("cy", function(d) { return c.yScale(d.size); })
             .style("fill", function(d) { return color(d.kind); })
             .attr("opacity", 0)
@@ -138,30 +128,64 @@ function NetPane(selection) {
             .duration(function() { return 250 - 100 + 100*Math.random() })
             .style("opacity", 0.8)
             .attr("r", 7)
-          .transition()
+         .transition()
             .ease("linear")
             .duration(60 * 1000)
-            .attr("cx", function(d) {
-                var fin_x = width - d.start_x; 
-                return fin_x;
-            })
-            .each("end", function(d) { 
-                d3.select(this).call(exitMe, d);
-            });
-
-        function exitMe(select, datum) {
-            select.transition()
-                .duration(100)
-                .style("opacity", 0)
-              .remove();
-            delete c.data[id(datum)];
-        }
+            .attr("cx", endXPos)
+          .each("end", exitObj)
 
     }
 
+    function animateObj(select) {
+            }
+
+    function exitObj() {
+        d3.select(this).transition()
+            .duration(100)
+            .style("opacity", 0)
+          .remove();
+    }
+
+    function randomXStart(d) {
+        d.start_x = (width - 20) + Math.random() * 20;
+        return d.start_x;
+    }
+
+    function endXPos(d) {
+        var fin_x = width - d.start_x; 
+        return fin_x;
+    }
+
+
+ 
+
+    chart.addBlock = function(block){
+        var c = chart;
+        var g = chart.g.append("rect").datum(block)
+            .attr("class", "block")
+            .on("click", openLink)
+            .attr("rx", "5")
+            .attr("ry", "5")
+            .attr("x", width-50)
+            .attr("y", function(d) { return c.yScale(d.size); })
+            .attr("width", 40)
+            .attr("height", 40)
+            .attr("fill", "brown")
+            .attr("opacity", 0.8)
+          .transition()
+            .ease("linear")
+            .duration(60*1000)
+            .attr("x", 40)
+          .each("end", exitObj)
+    }
+
     chart.addObject = function(obj){
-        chart.data[id(obj)] = obj;
-        chart.update(obj);
+        //chart.data[id(obj)] = obj;
+        if (obj.type == "tx") {
+            chart.addTx(obj);
+        } else if (obj.type == "block") {
+            chart.addBlock(obj);
+        }
     }
 
     chart.color = function(_) {

@@ -5,6 +5,7 @@ nginx
 postgresql-9.3 # questionable
 supervisor
 libpq-dev
+ntp
 
 # from tarball or source
 redis
