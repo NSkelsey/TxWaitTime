@@ -82,13 +82,13 @@ func main() {
 	dieWith(err)
 
 	cfg := watchtower.TowerCfg{
-		StartHeight: height,
+		StartHeight: int(height),
 		Net:         netparams.Net,
 		Addr:        addr,
 	}
 
 	// Pass in closures and let them work
-	watchtower.Create(cfg, netparams.Net, txParser, blockParser)
+	watchtower.Create(cfg, txParser, blockParser)
 }
 
 func rpcroutine(client *btcrpcclient.Client, rpcchan <-chan *ResConn) {
