@@ -1,5 +1,6 @@
 DROP TYPE IF EXISTS kinds CASCADE;
 DROP TABLE IF EXISTS relations CASCADE;
+DROP TABLE IF EXISTS txouts CASCADE;
 DROP TABLE IF EXISTS tx_features;
 DROP TABLE IF EXISTS txs;
 DROP TABLE IF EXISTS blocks;
@@ -16,7 +17,8 @@ CREATE TABLE txs (
     size        integer,
     extra       boolean,
     priority    float8,
-    fee         integer
+    fee         integer,
+    raw         bytea
 );
 
 CREATE TABLE tx_features (
@@ -29,6 +31,14 @@ CREATE TABLE tx_features (
     nulldata    int
 );
 
+CREATE TABLE txouts (
+    txid        bytea REFERENCES txs (txid),
+    vout        int,
+    val         bigint,
+    kind        kinds,
+    PRIMARY KEY(txid, vout)
+);
+
 CREATE TABLE blocks (
     hash        bytea primary key,
     firstseen   timestamp,
@@ -39,8 +49,6 @@ CREATE TABLE relations (
     txid        bytea references txs(txid),
     block       bytea references blocks(hash)
 );
-
-
 
 CREATE OR REPLACE FUNCTION kind(bytea) RETURNS kinds AS $$
 DECLARE
@@ -63,4 +71,3 @@ BEGIN
     END IF;
 END;
 $$ LANGUAGE plpgsql;
-

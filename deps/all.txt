@@ -6,17 +6,20 @@ postgresql-9.3 # questionable
 supervisor
 libpq-dev
 ntp
+make
+python-pip
 
 # from tarball or source
-redis
-golang
+redis http://download.redis.io/redis-stable.tar.gz
+golang http://golang.org/dl/go1.3.linux-amd64.tar.gz
+bitcoind https://bitcoin.org/bin/0.9.2.1/bitcoin-0.9.2.1-linux.tar.gz
 
 # from language dep managers
 # go root set before go get
 go get github.com/NSkelsey/TxWaitTime
 pip install celery[redis]
 pip install psycopg2
-pip install sqlalchemy supervisor flask
+pip install sqlalchemy flask gunicorn
 
 # system config needed
 GOPATH GOROOT

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
 	"log"
 	"os"
@@ -16,7 +17,7 @@ import (
 	"github.com/lib/pq"
 )
 
-var logger *log.Logger = log.New(os.Stdout, "", log.Ltime|log.Ldate)
+var logger *log.Logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Llongfile)
 var db *sql.DB
 
 // some golang ugliness
@@ -82,13 +83,13 @@ func main() {
 	dieWith(err)
 
 	cfg := watchtower.TowerCfg{
-		StartHeight: height,
+		StartHeight: int(height),
 		Net:         netparams.Net,
 		Addr:        addr,
 	}
 
 	// Pass in closures and let them work
-	watchtower.Create(cfg, netparams.Net, txParser, blockParser)
+	watchtower.Create(cfg, txParser, blockParser)
 }
 
 func rpcroutine(client *btcrpcclient.Client, rpcchan <-chan *ResConn) {
@@ -177,13 +178,18 @@ func txroutine(rpcchan chan *ResConn, txmeta *watchtower.TxMeta) {
 		priority = mempooljson.StartingPriority
 
 	}
-	txbytes := txid.Bytes()
+	txidbytes := txid.Bytes()
+	// copy tx bytes into a byte array for storage
+	buf := bytes.NewBuffer(make([]byte, 0, txmeta.MsgTx.SerializeSize()))
+	txmeta.MsgTx.Serialize(buf)
+	txbytes := buf.Bytes()
 	dbTx, err := db.Begin()
 	if err != nil {
 		logger.Println(err)
 		return
 	}
 
+	// Store tx features
 	featStmt, err := dbTx.Prepare(`
 	INSERT INTO tx_features(txid, nonstandard, pubkey, pubkeyhash, scripthash, multisig, nulldata)
 	SELECT $1, $2, $3, $4, $5, $6, $7
@@ -194,22 +200,40 @@ func txroutine(rpcchan chan *ResConn, txmeta *watchtower.TxMeta) {
 	if err != nil {
 		logger.Println(err)
 	}
-	_, err = featStmt.Exec(txbytes, counts[NonStandard], counts[PubKey], counts[PubKeyHash],
+	_, err = featStmt.Exec(txidbytes, counts[NonStandard], counts[PubKey], counts[PubKeyHash],
 		counts[ScriptHash], counts[MultiSig], counts[NullData])
 	if err != nil {
 		logger.Println(err)
 	}
 
+	// Store tx
 	upStmt, _ := dbTx.Prepare(`
-	INSERT INTO txs(txid, kind, firstseen, size, extra, fee, priority)
-	SELECT $1, $2, $3, $4, $5, $6, $7
-	WHERE NOT EXISTS (
-		SELECT * FROM txs WHERE txid=$1
+		INSERT INTO txs(txid, kind, firstseen, size, extra, fee, priority, raw)
+		SELECT $1, $2, $3, $4, $5, $6, $7, $8
+		WHERE NOT EXISTS (
+			SELECT * FROM txs WHERE txid=$1
 	);
 	`)
-	_, err = upStmt.Exec(txbytes, kind, now, size, extra, fee, priority)
+	_, err = upStmt.Exec(txidbytes, kind, now, size, extra, fee, priority, txbytes)
 	if err != nil {
 		logger.Println(err)
+	}
+
+	// Store txouts
+	txOutStmt, _ := dbTx.Prepare(`
+		INSERT INTO txouts(txid, vout, val, kind)
+		SELECT $1, $2, $3, $4
+		WHERE NOT EXISTS (
+			SELECT * FROM txouts where txid=$1 AND vout=$2
+		);
+	`)
+
+	for vout, txout := range txmeta.MsgTx.TxOut {
+		class := btcscript.GetScriptClass(txout.PkScript)
+		_, err = txOutStmt.Exec(txidbytes, vout, txout.Value, class.String())
+		if err != nil {
+			logger.Println(err)
+		}
 	}
 
 	if txmeta.BlockSha != nil {
