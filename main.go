@@ -45,6 +45,9 @@ func main() {
 	defer db.Close()
 	dieWith(err)
 
+	// Let the db handler open threads at will. This is to handle mainnet volume.
+	db.SetMaxIdleConns(150)
+
 	err = db.Ping()
 	dieWith(err)
 
