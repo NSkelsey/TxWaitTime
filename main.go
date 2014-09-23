@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"log"
+	"math/rand"
 	"os"
 	"time"
 
@@ -38,8 +39,8 @@ type ResConn struct {
 func main() {
 	client, netparams := btcbuilder.ConfigureApp()
 	addr := "127.0.0.1:" + netparams.DefaultPort
-
 	connurl := "postgres://postgres:obscureref@localhost/txwaittime"
+
 	var err error
 	db, err = sql.Open("postgres", connurl)
 	defer db.Close()
@@ -59,14 +60,13 @@ func main() {
 	time.Sleep(1)
 
 	txParser := func(txmeta *watchtower.TxMeta) {
-
-		go txroutine(rpcchan, txmeta)
+		txroutine(rpcchan, txmeta)
 	}
 
 	blockParser := func(now time.Time, block *btcwire.MsgBlock) {
-		logger.Println("Saw block")
 		_hash, _ := block.BlockSha()
 		hash := _hash.Bytes()
+		logger.Printf("Saw block %v", hash)
 		// insert block
 		_, err := db.Exec(`INSERT INTO blocks(hash, firstseen) VALUES($1, $2)`,
 			hash, now)
@@ -100,7 +100,7 @@ func rpcroutine(client *btcrpcclient.Client, rpcchan <-chan *ResConn) {
 	// This variable is a big unknown :-/
 	var mempoolfut btcrpcclient.FutureGetRawMempoolVerboseResult
 
-	tick := time.Tick(500 * time.Millisecond)
+	tick := time.Tick(200 * time.Millisecond)
 	chanmap := make(map[string]chan btcjson.GetRawMempoolResult)
 	mempoolfut = client.GetRawMempoolVerboseAsync()
 	for {
@@ -110,7 +110,7 @@ func rpcroutine(client *btcrpcclient.Client, rpcchan <-chan *ResConn) {
 		// reported from an external data source
 		select {
 		case <-tick:
-			//logger.Println("ticked for rpc")
+			// timeout if the rpc request takes too long
 			// try to recieve from future
 			var err error
 			txmempool, err = mempoolfut.Receive()
@@ -136,53 +136,21 @@ func rpcroutine(client *btcrpcclient.Client, rpcchan <-chan *ResConn) {
 	}
 }
 
-func txroutine(rpcchan chan *ResConn, txmeta *watchtower.TxMeta) {
-	var now time.Time
-	if txmeta.BlockSha != nil {
-		now = txmeta.Time
-	} else {
-		now = time.Now()
-	}
-	txid, err := txmeta.MsgTx.TxSha()
-	if err != nil {
-		logger.Println(err)
-		return
-	}
+func handleSingleTx(rpcchan chan *ResConn, txmeta *watchtower.TxMeta) {
+	// Tries to gather additional information about a tx and
+	// commit the tx to the database.
+
+	// change behavior if our tx is in a block
+	var txInBlock bool = txmeta.BlockSha != nil
+	txid, _ := txmeta.MsgTx.TxSha()
+	txidbytes := txid.Bytes()
+
+	// Extracting Tx Features
 	counts := btcbuilder.ExtractOutScripts(txmeta.MsgTx)
 	kind := btcbuilder.SelectKind(txmeta.MsgTx)
 	size := txmeta.MsgTx.SerializeSize()
 
-	jsonChan := make(chan btcjson.GetRawMempoolResult, 1)
-
-	rpcchan <- &ResConn{
-		Txid: txid.String(),
-		Chan: jsonChan,
-	}
-
-	var extra bool
-	var fee int64
-	var priority float64
-
-	timeout := time.NewTimer(time.Second * 1)
-	var mempooljson btcjson.GetRawMempoolResult
-	select {
-	case <-timeout.C:
-		// insert with null values
-		extra = false
-		fee = 0
-		priority = 0
-
-	case mempooljson = <-jsonChan:
-		amnt, _ := btcutil.NewAmount(mempooljson.Fee)
-		logger.Println(amnt)
-		// The goods!
-		extra = true
-		fee = int64(amnt)
-		priority = mempooljson.StartingPriority
-
-	}
-	txidbytes := txid.Bytes()
-	// copy tx bytes into a byte array for storage
+	// Copy tx bytes into a byte array for storage in the db
 	buf := bytes.NewBuffer(make([]byte, 0, txmeta.MsgTx.SerializeSize()))
 	txmeta.MsgTx.Serialize(buf)
 	txbytes := buf.Bytes()
@@ -192,13 +160,13 @@ func txroutine(rpcchan chan *ResConn, txmeta *watchtower.TxMeta) {
 		return
 	}
 
-	// Store tx features
+	// Store Tx Features
 	featStmt, err := dbTx.Prepare(`
-	INSERT INTO tx_features(txid, nonstandard, pubkey, pubkeyhash, scripthash, multisig, nulldata)
-	SELECT $1, $2, $3, $4, $5, $6, $7
-	WHERE NOT EXISTS (
-		SELECT * FROM tx_features WHERE txid=$1
-	);
+		INSERT INTO tx_features(txid, nonstandard, pubkey, pubkeyhash, scripthash, multisig, nulldata)
+		SELECT $1, $2, $3, $4, $5, $6, $7
+		WHERE NOT EXISTS (
+			SELECT * FROM tx_features WHERE txid=$1
+		);
 	`)
 	if err != nil {
 		logger.Println(err)
@@ -209,17 +177,60 @@ func txroutine(rpcchan chan *ResConn, txmeta *watchtower.TxMeta) {
 		logger.Println(err)
 	}
 
-	// Store tx
-	upStmt, _ := dbTx.Prepare(`
-		INSERT INTO txs(txid, kind, firstseen, size, extra, fee, priority, raw)
-		SELECT $1, $2, $3, $4, $5, $6, $7, $8
-		WHERE NOT EXISTS (
-			SELECT * FROM txs WHERE txid=$1
-	);
-	`)
-	_, err = upStmt.Exec(txidbytes, kind, now, size, extra, fee, priority, txbytes)
-	if err != nil {
-		logger.Println(err)
+	// Store the tx itself
+	if txInBlock {
+		// The Tx is in a block, therefore we should just store
+		upStmt, _ := dbTx.Prepare(`
+			INSERT INTO txs(txid, kind, firstseen, size, raw)
+			SELECT $1, $2, $3, $4, $5
+			WHERE NOT EXISTS (
+				SELECT * FROM txs WHERE txid=$1
+			);
+		`)
+		_, err = upStmt.Exec(txidbytes, kind, txmeta.Time, size, txbytes)
+		if err != nil {
+			logger.Println(err)
+		}
+
+	} else {
+		// The Tx is not in a block, therefore we can collect extra info about it.
+
+		// We use a crazy RPC call to get info from bitcoins mempool
+		jsonChan := make(chan btcjson.GetRawMempoolResult, 1)
+		rpcchan <- &ResConn{
+			Txid: txid.String(),
+			Chan: jsonChan,
+		}
+
+		var extra bool = false
+		var fee int64 = 0
+		var priority float64 = 0
+
+		timeout := time.NewTimer(time.Millisecond * 250)
+		var mempooljson btcjson.GetRawMempoolResult
+		select {
+		case <-timeout.C:
+			logger.Printf("Rpc timeout on tx: %v", txid)
+		case mempooljson = <-jsonChan:
+			amnt, _ := btcutil.NewAmount(mempooljson.Fee)
+			// The goods!
+			extra = true
+			fee = int64(amnt)
+			priority = mempooljson.StartingPriority
+		}
+
+		// Commit tx
+		upStmt, _ := dbTx.Prepare(`
+			INSERT INTO txs(txid, kind, firstseen, size, extra, fee, priority, raw)
+			SELECT $1, $2, $3, $4, $5, $6, $7, $8
+			WHERE NOT EXISTS (
+				SELECT * FROM txs WHERE txid=$1
+			);
+		`)
+		_, err = upStmt.Exec(txidbytes, kind, txmeta.Time, size, extra, fee, priority, txbytes)
+		if err != nil {
+			logger.Println(err)
+		}
 	}
 
 	// Store txouts
@@ -239,7 +250,8 @@ func txroutine(rpcchan chan *ResConn, txmeta *watchtower.TxMeta) {
 		}
 	}
 
-	if txmeta.BlockSha != nil {
+	if txInBlock {
+		// Record that the tx is in a block
 		_, err = dbTx.Exec(`INSERT INTO relations(txid, block) VALUES($1, $2)`,
 			txid.Bytes(), txmeta.BlockSha)
 		if err != nil {
@@ -251,4 +263,14 @@ func txroutine(rpcchan chan *ResConn, txmeta *watchtower.TxMeta) {
 	if err != nil {
 		logger.Println(err)
 	}
+	logger.Printf("Commit %v", txid)
+}
+
+func txroutine(rpcchan chan *ResConn, txmeta *watchtower.TxMeta) {
+	if txmeta.BlockSha != nil {
+		// If tx is in a block, randomly sleep routine for interval between 0-1 minute
+		backoff := time.Duration(rand.Intn(1000))
+		time.Sleep(time.Millisecond * backoff)
+	}
+	handleSingleTx(rpcchan, txmeta)
 }
