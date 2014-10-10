@@ -66,7 +66,7 @@ func main() {
 	blockParser := func(now time.Time, block *btcwire.MsgBlock) {
 		_hash, _ := block.BlockSha()
 		hash := _hash.Bytes()
-		logger.Printf("Saw block %v", hash)
+		logger.Printf("Saw block %v", _hash)
 		// insert block
 		_, err := db.Exec(`INSERT INTO blocks(hash, firstseen) VALUES($1, $2)`,
 			hash, now)
@@ -115,7 +115,7 @@ func rpcroutine(client *btcrpcclient.Client, rpcchan <-chan *ResConn) {
 			var err error
 			txmempool, err = mempoolfut.Receive()
 			if err != nil {
-				logger.Println(err)
+				logger.Fatal(err)
 				break
 			}
 
